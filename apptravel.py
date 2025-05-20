@@ -1,32 +1,42 @@
 import streamlit as st
-import requests
+import openai
+import os
+from dotenv import load_dotenv
 
-st.title("🌏 QuickGo Travel Recommender")
+# Load API key from .env
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-location = st.text_input("📍 Where are you?", "Cebu")
-time_available = st.slider("⏱️ Time Available (minutes)", 15, 180, 45)
-interests = st.multiselect(
-    "🎯 What are your interests?",
-    ["coffee", "nature", "museums", "shopping", "beach", "food", "art"],
-    default=["coffee", "nature"]
-)
+st.set_page_config(page_title="QuickGo Travel Recommender", page_icon="🌍")
+st.title("QuickGo Travel Recommender")
+
+# User input fields
+location = st.text_input("🔍 Where are you?", "Cebu")
+time_available = st.slider("⏰ Time Available (minutes)", 15, 180, 45)
+interests = st.multiselect("🌟 What are your interests?", ["coffee", "nature", "museums", "food", "shopping", "history", "parks"])
 
 if st.button("✨ Get Recommendation"):
-    payload = {
-        "location": location,
-        "time_available": time_available,
-        "interests": interests
-    }
+    if not openai.api_key:
+        st.error("Missing OpenAI API key. Please check your .env file.")
+    elif not interests:
+        st.warning("Please select at least one interest.")
+    else:
+        with st.spinner("Sending your preferences to the GPT travel engine..."):
+            prompt = f"""
+            I'm in {location} and I have {time_available} minutes.
+            I enjoy {', '.join(interests)}.
+            Can you recommend a place I can quickly visit nearby?
+            """
 
-    st.info("Sending your preferences to the GPT travel engine...")
-
-    try:
-        response = requests.post("http://127.0.0.1:8000/recommend", json=payload)
-        data = response.json()
-
-        if "suggestions" in data:
-            st.success(data["suggestions"])
-        else:
-            st.error(data.get("error", "Unexpected error."))
-    except Exception as e:
-        st.error(f"⚠️ Error: {str(e)}")
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You're a helpful travel guide who gives local and quick recommendations."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                suggestion = response['choices'][0]['message']['content']
+                st.success(suggestion)
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
